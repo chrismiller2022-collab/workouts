@@ -18,19 +18,19 @@ cp .env.example .env.local   # fill in what you have; everything is optional
 npm run dev
 ```
 
-The app runs with no configuration. Without Supabase it uses an in-memory store, and without `ANTHROPIC_API_KEY` the "Extract" button reports that AI parsing is unavailable.
+The app runs with no configuration. Without `DATABASE_URL` it uses an in-memory store, and without `ANTHROPIC_API_KEY` the "Extract" button reports that AI parsing is unavailable.
 
-## Set up Supabase
+## Database (free)
 
-1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/migrations/0001_init.sql` and then `0002_seed_exercises.sql`.
-3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The service key is used server-side only. RLS is enabled with no policies, so the public anon key can't touch the data.
+The app uses any Postgres database through `DATABASE_URL`. It creates its tables and loads the starter exercises the first time it runs, so there's no SQL to paste.
+
+The easiest free option is **Neon through Vercel**: in your Vercel project, open **Storage → Create Database → Neon** (free plan) and connect it to the project. Vercel sets `DATABASE_URL` for you.
 
 ## Deploy to Vercel
 
 1. Import this repo in Vercel.
-2. Add the environment variables from `.env.example`. Set `APP_PASSWORD` so the site isn't open to the public.
-3. Deploy.
+2. Add `ANTHROPIC_API_KEY` and `APP_PASSWORD` (so the site isn't open to the public) as environment variables.
+3. Deploy, then add the Neon database (see above) and redeploy.
 
 ## Share from Instagram on iPhone
 
@@ -51,4 +51,4 @@ Tap **Share → your shortcut** on a reel to open the Add page with the link fil
 ## Notes
 
 - AI parsing uses `claude-opus-5-5` with server-side refusal fallback (`fallbacks: "default"`) enabled. To turn it off, remove `betas`/`fallbacks` in `src/lib/parse.ts`.
-- Code layout: `src/lib/workout.ts` (timeline, estimates, randomizer), `src/lib/db.ts` (Supabase or memory store), `src/lib/parse.ts` (Claude extraction), `src/components/Player.tsx` (follow-along player).
+- Code layout: `src/lib/workout.ts` (timeline, estimates, randomizer), `src/lib/db.ts` (Postgres or memory store), `src/lib/parse.ts` (Claude extraction), `src/components/Player.tsx` (follow-along player).

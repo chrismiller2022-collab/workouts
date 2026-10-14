@@ -1,10 +1,10 @@
 import "server-only";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import postgres from "postgres";
 import { SEED_EXERCISES } from "./seed";
 import type { Category, Exercise, Workout, WorkoutItem } from "./types";
 
 /**
- * Storage: Supabase when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set,
+ * Storage: Postgres (e.g. Neon via the Vercel Marketplace) when DATABASE_URL is set,
  * otherwise an in-memory store (local dev only — resets on restart).
  */
 interface Store {
@@ -17,44 +17,96 @@ interface Store {
   deleteWorkout(id: string): Promise<void>;
 }
 
-const WORKOUT_COLUMNS = "id,title,source_url,notes,rounds,rest_seconds,round_rest_seconds,items,created_at";
-const EXERCISE_COLUMNS = "id,name,category,cues,demo_url,unilateral";
+/** Creates tables on first use, so a fresh database needs no manual setup. */
+const SCHEMA = `
+create table if not exists exercises (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  category text not null,
+  cues text,
+  demo_url text,
+  unilateral boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table if not exists workouts (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  source_url text,
+  notes text,
+  rounds int not null default 1,
+  rest_seconds int not null default 0,
+  round_rest_seconds int not null default 0,
+  items jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);`;
 
-function supabaseStore(sb: SupabaseClient): Store {
-  const check = <T>(res: { data: T | null; error: { message: string } | null }): T => {
-    if (res.error) throw new Error(res.error.message);
-    return res.data as T;
-  };
+const EXERCISE_COLUMNS = "id, name, category, cues, demo_url, unilateral";
+const WORKOUT_COLUMNS = "id, title, source_url, notes, rounds, rest_seconds, round_rest_seconds, items, created_at";
+
+function postgresStore(url: string): Store {
+  const sql = postgres(url, { max: 1, prepare: false, idle_timeout: 20 });
+  let ready: Promise<void> | null = null;
+  const init = () =>
+    (ready ??= (async () => {
+      await sql.unsafe(SCHEMA);
+      const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from exercises`;
+      if (count === 0) {
+        const rows = SEED_EXERCISES.map((e) => ({ ...e, cues: e.cues ?? null }));
+        await sql`insert into exercises ${sql(rows, "name", "category", "cues", "unilateral")} on conflict (name) do nothing`;
+      }
+    })().catch((e) => {
+      ready = null;
+      throw e;
+    }));
+  const toWorkout = (r: Record<string, unknown>) =>
+    ({ ...r, created_at: (r.created_at as Date).toISOString() }) as Workout;
+
   return {
     async listExercises() {
-      return check(await sb.from("exercises").select(EXERCISE_COLUMNS).order("name"));
+      await init();
+      return sql<Exercise[]>`select ${sql.unsafe(EXERCISE_COLUMNS)} from exercises order by name`;
     },
     async createExercise(e) {
-      return check(await sb.from("exercises").insert(e).select(EXERCISE_COLUMNS).single());
+      await init();
+      const [row] = await sql<Exercise[]>`
+        insert into exercises (name, category, cues, demo_url, unilateral)
+        values (${e.name}, ${e.category}, ${e.cues}, ${e.demo_url}, ${e.unilateral})
+        returning ${sql.unsafe(EXERCISE_COLUMNS)}`;
+      return row;
     },
     async updateExercise(id, patch) {
-      return check(await sb.from("exercises").update(patch).eq("id", id).select(EXERCISE_COLUMNS).single());
+      await init();
+      const cols = Object.keys(patch) as (keyof typeof patch)[];
+      const [row] = await sql<Exercise[]>`
+        update exercises set ${sql(patch, cols)} where id = ${id}
+        returning ${sql.unsafe(EXERCISE_COLUMNS)}`;
+      if (!row) throw new Error("Exercise not found");
+      return row;
     },
     async listWorkouts() {
-      return check(await sb.from("workouts").select(WORKOUT_COLUMNS).order("created_at", { ascending: false }));
+      await init();
+      const rows = await sql`select ${sql.unsafe(WORKOUT_COLUMNS)} from workouts order by created_at desc`;
+      return rows.map(toWorkout);
     },
     async getWorkout(id) {
-      return check(await sb.from("workouts").select(WORKOUT_COLUMNS).eq("id", id).maybeSingle());
+      await init();
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+      const [row] = await sql`select ${sql.unsafe(WORKOUT_COLUMNS)} from workouts where id = ${id}`;
+      return row ? toWorkout(row) : null;
     },
     async createWorkout(w) {
-      const row = {
-        title: w.title,
-        source_url: w.source_url ?? null,
-        notes: w.notes ?? null,
-        rounds: w.rounds,
-        rest_seconds: w.rest_seconds,
-        round_rest_seconds: w.round_rest_seconds,
-        items: w.items,
-      };
-      return check(await sb.from("workouts").insert(row).select(WORKOUT_COLUMNS).single());
+      await init();
+      const [row] = await sql`
+        insert into workouts (title, source_url, notes, rounds, rest_seconds, round_rest_seconds, items)
+        values (${w.title}, ${w.source_url ?? null}, ${w.notes ?? null}, ${w.rounds}, ${w.rest_seconds},
+                ${w.round_rest_seconds}, ${sql.json(w.items as unknown as postgres.JSONValue)})
+        returning ${sql.unsafe(WORKOUT_COLUMNS)}`;
+      return toWorkout(row);
     },
     async deleteWorkout(id) {
-      check(await sb.from("workouts").delete().eq("id", id));
+      await init();
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return;
+      await sql`delete from workouts where id = ${id}`;
     },
   };
 }
@@ -102,15 +154,15 @@ let store: Store | null = null;
 
 export function db(): Store {
   if (store) return store;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  store = url && key
-    ? supabaseStore(createClient(url, key, { auth: { persistSession: false } }))
-    : memoryStore();
+  const url = databaseUrl();
+  store = url ? postgresStore(url) : memoryStore();
   return store;
 }
 
-export const usingSupabase = () => Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+// The Neon/Vercel integration sets DATABASE_URL; POSTGRES_URL covers older Vercel Postgres setups.
+const databaseUrl = () => process.env.DATABASE_URL || process.env.POSTGRES_URL || null;
+
+export const usingDatabase = () => Boolean(databaseUrl());
 
 /**
  * Links each item to a library exercise by name, adding new exercises to the

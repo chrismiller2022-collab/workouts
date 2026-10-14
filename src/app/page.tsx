@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, usingSupabase } from "@/lib/db";
+import { db, usingDatabase } from "@/lib/db";
 import { estimateSeconds, formatDuration } from "@/lib/workout";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +23,9 @@ export default async function Home() {
         </Link>
       </section>
 
-      {!usingSupabase() && (
+      {!usingDatabase() && (
         <p className="rounded-lg border border-yellow-700 bg-yellow-950/40 p-3 text-sm text-yellow-200">
-          Running without Supabase: saved workouts are kept in memory and will disappear on restart. See the README to connect a database.
+          Running without a database: saved workouts are kept in memory and will disappear on restart. See the README to connect a database.
         </p>
       )}
 

@@ -22,10 +22,22 @@ export const WorkoutSchema = z.object({
   items: z.array(WorkoutItemSchema).min(1),
 });
 
-export const ExerciseSchema = z.object({
+const emptyToNull = z.string().nullable().transform((v) => v || null);
+
+const exerciseFields = {
   name: z.string().trim().min(1),
   category: z.enum(CATEGORIES),
-  cues: z.string().nullish().transform((v) => v || null),
-  demo_url: z.string().nullish().transform((v) => v || null),
+  cues: emptyToNull,
+  demo_url: emptyToNull,
+  unilateral: z.boolean(),
+};
+
+export const ExerciseSchema = z.object({
+  ...exerciseFields,
+  cues: emptyToNull.default(null),
+  demo_url: emptyToNull.default(null),
   unilateral: z.boolean().default(false),
 });
+
+/** For PATCH: only fields that are present are validated and updated. */
+export const ExercisePatchSchema = z.object(exerciseFields).partial();
