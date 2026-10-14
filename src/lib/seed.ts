@@ -1,0 +1,35 @@
+import type { Exercise } from "./types";
+
+type Seed = Omit<Exercise, "id" | "demo_url">;
+
+export const SEED_EXERCISES: Seed[] = [
+  { name: "Two-Hand Swing", category: "swing", unilateral: false, cues: "Hike the bell back, snap hips forward, arms are ropes. Bell floats to chest height." },
+  { name: "One-Arm Swing", category: "swing", unilateral: true, cues: "Square shoulders, resist rotation. Free hand follows or stays on hip." },
+  { name: "Hand-to-Hand Swing", category: "swing", unilateral: true, cues: "Switch hands at the float. Keep the hinge crisp." },
+  { name: "Figure 8", category: "swing", unilateral: false, cues: "Pass the bell between legs in a figure-8 pattern, hips hinged, back flat." },
+  { name: "Kettlebell Deadlift", category: "hinge", unilateral: false, cues: "Bell between feet, push hips back, flat back, stand tall and squeeze glutes." },
+  { name: "Single-Leg Deadlift", category: "hinge", unilateral: true, cues: "Hinge on one leg, back leg reaches long, hips square." },
+  { name: "Suitcase Deadlift", category: "hinge", unilateral: true, cues: "Bell at your side, stay upright, don't lean toward the weight." },
+  { name: "Goblet Squat", category: "squat", unilateral: false, cues: "Hold bell by the horns at chest, elbows inside knees, sit between heels." },
+  { name: "Front Rack Squat", category: "squat", unilateral: false, cues: "Bell racked on forearm, wrist straight, chest tall." },
+  { name: "Reverse Lunge", category: "lunge", unilateral: true, cues: "Step back, back knee kisses the floor, drive through front heel." },
+  { name: "Goblet Lateral Lunge", category: "lunge", unilateral: true, cues: "Step wide, sit into one hip, other leg straight." },
+  { name: "Overhead Press", category: "press", unilateral: true, cues: "From rack, press straight up, biceps by ear, ribs down." },
+  { name: "Push Press", category: "press", unilateral: true, cues: "Small dip with the legs, drive the bell overhead." },
+  { name: "Floor Press", category: "press", unilateral: true, cues: "Lie down, elbow touches floor, press up." },
+  { name: "Bent-Over Row", category: "pull", unilateral: true, cues: "Hinge, pull elbow to hip, squeeze shoulder blade." },
+  { name: "Gorilla Row", category: "pull", unilateral: false, cues: "Two bells, wide stance hinge, alternate rows." },
+  { name: "High Pull", category: "pull", unilateral: true, cues: "Swing into a pull, elbow high and back." },
+  { name: "Russian Twist", category: "core", unilateral: false, cues: "Lean back, feet up or down, rotate bell side to side." },
+  { name: "Halo", category: "core", unilateral: false, cues: "Circle the bell around your head, ribs down, glutes tight." },
+  { name: "Dead Bug Pullover", category: "core", unilateral: false, cues: "Lower back glued to the floor, opposite arm and leg extend." },
+  { name: "Kettlebell Sit-Up", category: "core", unilateral: false, cues: "Hold bell at chest or overhead, roll up with control." },
+  { name: "Plank Pull-Through", category: "core", unilateral: false, cues: "High plank, drag bell under body side to side, hips still." },
+  { name: "Farmer Carry", category: "carry", unilateral: false, cues: "Tall posture, shoulders packed, walk with control." },
+  { name: "Suitcase Carry", category: "carry", unilateral: true, cues: "One bell, stay perfectly upright." },
+  { name: "Clean", category: "full_body", unilateral: true, cues: "Swing it close, zip up, soft catch in rack." },
+  { name: "Snatch", category: "full_body", unilateral: true, cues: "Swing, high pull, punch through at the top. Lockout overhead." },
+  { name: "Thruster", category: "full_body", unilateral: false, cues: "Front squat into an overhead press in one motion." },
+  { name: "Turkish Get-Up", category: "full_body", unilateral: true, cues: "Eyes on the bell, slow and controlled, arm locked out the whole time." },
+  { name: "Clean and Press", category: "full_body", unilateral: true, cues: "Clean to rack, then press overhead." },
+];
