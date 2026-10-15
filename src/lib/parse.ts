@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { CATEGORIES, type Exercise, type Workout } from "./types";
 
@@ -37,13 +37,12 @@ export async function parseWorkoutText(text: string, library: Exercise[]): Promi
   client ??= new Anthropic();
   const names = library.map((e) => `${e.name} (${e.category})`).join(", ");
 
-  const response = await client.beta.messages.parse({
-    model: "claude-opus-5-5",
+  // Haiku is plenty for pulling sets/reps out of a caption, at a fraction of the cost.
+  const response = await client.messages.parse({
+    model: "claude-haiku-5-5",
     max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
     thinking: { type: "adaptive" },
-    output_config: { effort: "low", format: betaZodOutputFormat(ParsedWorkout) },
+    output_config: { effort: "low", format: zodOutputFormat(ParsedWorkout) },
     system: SYSTEM,
     messages: [
       {

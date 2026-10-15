@@ -50,5 +50,5 @@ Tap **Share → your shortcut** on a reel to open the Add page with the link fil
 
 ## Notes
 
-- AI parsing uses `claude-opus-5-5` with server-side refusal fallback (`fallbacks: "default"`) enabled. To turn it off, remove `betas`/`fallbacks` in `src/lib/parse.ts`.
+- AI parsing uses `claude-haiku-5-5`, which costs about 0.1¢ per caption. Only the Extract button calls the API. The model is set in `src/lib/parse.ts`.
 - Code layout: `src/lib/workout.ts` (timeline, estimates, randomizer), `src/lib/db.ts` (Postgres or memory store), `src/lib/parse.ts` (Claude extraction), `src/components/Player.tsx` (follow-along player).
