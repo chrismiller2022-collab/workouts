@@ -6,10 +6,17 @@ import { CHALLENGE_COOKIE, clearCookie, relyingParty, setChallengeCookie, withSe
 import { db } from "@/lib/db";
 import { authEnabled, sign, verify } from "@/lib/session";
 
-/** Step 1: options for the browser's passkey prompt (any passkey saved for this site). */
+/** Step 1: options for the browser's passkey prompt. */
 export async function GET(req: Request) {
   if (!authEnabled()) return NextResponse.json({ error: "Sign-in is not enabled" }, { status: 400 });
-  const options = await generateAuthenticationOptions({ rpID: relyingParty(req).rpID, userVerification: "preferred" });
+  // Listing the saved passkeys (single-user app, so this is all of them) lets authenticators that
+  // can't search for discoverable credentials without biometrics still find theirs.
+  const passkeys = await db().listPasskeys();
+  const options = await generateAuthenticationOptions({
+    rpID: relyingParty(req).rpID,
+    userVerification: "preferred",
+    allowCredentials: passkeys.map((p) => ({ id: p.id, transports: p.transports ?? undefined })),
+  });
   const res = NextResponse.json(options);
   setChallengeCookie(res, await sign("auth", options.challenge, 300_000));
   return res;
@@ -32,6 +39,9 @@ export async function POST(req: Request) {
       expectedChallenge: challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
+      // Matches userVerification: "preferred": some passkey providers (password managers,
+      // computers without biometrics or a PIN) only confirm presence, not identity.
+      requireUserVerification: false,
       credential: {
         id: passkey.id,
         publicKey: isoBase64URL.toBuffer(passkey.public_key),

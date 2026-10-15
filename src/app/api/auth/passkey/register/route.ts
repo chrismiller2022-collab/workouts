@@ -40,6 +40,9 @@ export async function POST(req: Request) {
       expectedChallenge: challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
+      // Matches userVerification: "preferred": some passkey providers (password managers,
+      // computers without biometrics or a PIN) only confirm presence, not identity.
+      requireUserVerification: false,
     });
     if (!result.verified) throw new Error("Passkey could not be verified");
     const { credential } = result.registrationInfo;
