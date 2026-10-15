@@ -7,6 +7,16 @@ import type { Category, Exercise, Workout, WorkoutItem } from "./types";
  * Storage: Postgres (e.g. Neon via the Vercel Marketplace) when DATABASE_URL is set,
  * otherwise an in-memory store (local dev only — resets on restart).
  */
+export interface Passkey {
+  id: string;
+  public_key: string; // base64url
+  counter: number;
+  transports: string[] | null;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
 interface Store {
   listExercises(): Promise<Exercise[]>;
   createExercise(e: Omit<Exercise, "id">): Promise<Exercise>;
@@ -15,6 +25,11 @@ interface Store {
   getWorkout(id: string): Promise<Workout | null>;
   createWorkout(w: Workout): Promise<Workout>;
   deleteWorkout(id: string): Promise<void>;
+  listPasskeys(): Promise<Passkey[]>;
+  getPasskey(id: string): Promise<Passkey | null>;
+  addPasskey(p: Omit<Passkey, "created_at" | "last_used_at">): Promise<void>;
+  touchPasskey(id: string, counter: number): Promise<void>;
+  deletePasskey(id: string): Promise<void>;
 }
 
 /** Creates tables on first use, so a fresh database needs no manual setup. */
@@ -38,6 +53,15 @@ create table if not exists workouts (
   round_rest_seconds int not null default 0,
   items jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
+);
+create table if not exists passkeys (
+  id text primary key,
+  public_key text not null,
+  counter bigint not null default 0,
+  transports jsonb,
+  name text not null,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz
 );`;
 
 const EXERCISE_COLUMNS = "id, name, category, cues, demo_url, unilateral";
@@ -108,14 +132,53 @@ function postgresStore(url: string): Store {
       if (!/^[0-9a-f-]{36}$/i.test(id)) return;
       await sql`delete from workouts where id = ${id}`;
     },
+    async listPasskeys() {
+      await init();
+      const rows = await sql`select * from passkeys order by created_at`;
+      return rows.map(toPasskey);
+    },
+    async getPasskey(id) {
+      await init();
+      const [row] = await sql`select * from passkeys where id = ${id}`;
+      return row ? toPasskey(row) : null;
+    },
+    async addPasskey(p) {
+      await init();
+      await sql`
+        insert into passkeys (id, public_key, counter, transports, name)
+        values (${p.id}, ${p.public_key}, ${p.counter}, ${p.transports ? sql.json(p.transports) : null}, ${p.name})`;
+    },
+    async touchPasskey(id, counter) {
+      await init();
+      await sql`update passkeys set counter = ${counter}, last_used_at = now() where id = ${id}`;
+    },
+    async deletePasskey(id) {
+      await init();
+      await sql`delete from passkeys where id = ${id}`;
+    },
+  };
+}
+
+function toPasskey(r: Record<string, unknown>): Passkey {
+  return {
+    id: r.id as string,
+    public_key: r.public_key as string,
+    counter: Number(r.counter),
+    transports: (r.transports as string[] | null) ?? null,
+    name: r.name as string,
+    created_at: (r.created_at as Date).toISOString(),
+    last_used_at: r.last_used_at ? (r.last_used_at as Date).toISOString() : null,
   };
 }
 
 function memoryStore(): Store {
-  const g = globalThis as unknown as { __kbStore?: { exercises: Exercise[]; workouts: Workout[] } };
+  const g = globalThis as unknown as {
+    __kbStore?: { exercises: Exercise[]; workouts: Workout[]; passkeys: Passkey[] };
+  };
   g.__kbStore ??= {
     exercises: SEED_EXERCISES.map((e) => ({ ...e, id: crypto.randomUUID(), demo_url: null })),
     workouts: [],
+    passkeys: [],
   };
   const s = g.__kbStore;
   return {
@@ -147,6 +210,22 @@ function memoryStore(): Store {
     async deleteWorkout(id) {
       s.workouts = s.workouts.filter((w) => w.id !== id);
     },
+    async listPasskeys() {
+      return [...s.passkeys];
+    },
+    async getPasskey(id) {
+      return s.passkeys.find((p) => p.id === id) ?? null;
+    },
+    async addPasskey(p) {
+      s.passkeys.push({ ...p, created_at: new Date().toISOString(), last_used_at: null });
+    },
+    async touchPasskey(id, counter) {
+      const p = s.passkeys.find((x) => x.id === id);
+      if (p) Object.assign(p, { counter, last_used_at: new Date().toISOString() });
+    },
+    async deletePasskey(id) {
+      s.passkeys = s.passkeys.filter((p) => p.id !== id);
+    },
   };
 }
 
@@ -159,8 +238,18 @@ export function db(): Store {
   return store;
 }
 
-// The Neon/Vercel integration sets DATABASE_URL; POSTGRES_URL covers older Vercel Postgres setups.
-const databaseUrl = () => process.env.DATABASE_URL || process.env.POSTGRES_URL || null;
+/**
+ * The Neon/Vercel integration sets DATABASE_URL, or e.g. STORAGE_DATABASE_URL when a custom prefix
+ * was chosen; POSTGRES_URL covers older Vercel Postgres setups.
+ */
+function databaseUrl(): string | null {
+  const direct = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (direct) return direct;
+  const prefixed = Object.entries(process.env).find(
+    ([k, v]) => /_(DATABASE_URL|POSTGRES_URL)$/.test(k) && v?.startsWith("postgres"),
+  );
+  return prefixed?.[1] ?? null;
+}
 
 export const usingDatabase = () => Boolean(databaseUrl());
 

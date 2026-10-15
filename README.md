@@ -18,7 +18,7 @@ cp .env.example .env.local   # fill in what you have; everything is optional
 npm run dev
 ```
 
-The app runs with no configuration. Without `DATABASE_URL` it uses an in-memory store, and without `ANTHROPIC_API_KEY` the "Extract" button reports that AI parsing is unavailable.
+The app runs with no configuration. Without a database URL it uses an in-memory store, and without `ANTHROPIC_API_KEY` the "Extract" button reports that AI parsing is unavailable.
 
 ## Database (free)
 
@@ -29,8 +29,12 @@ The easiest free option is **Neon through Vercel**: in your Vercel project, open
 ## Deploy to Vercel
 
 1. Import this repo in Vercel.
-2. Add `ANTHROPIC_API_KEY` and `APP_PASSWORD` (so the site isn't open to the public) as environment variables.
+2. Add `ANTHROPIC_API_KEY` and `APP_PASSWORD` as environment variables. With `APP_PASSWORD` set, the site shows a sign-in page.
 3. Deploy, then add the Neon database (see above) and redeploy.
+
+## Sign-in and passkeys
+
+Set `APP_PASSWORD` to lock the site. Sign in once with the password, then go to **⚙︎ Settings → Add a passkey** to use Face ID, Touch ID or your phone after that. Sessions last 180 days. Passkeys are tied to the domain they were created on, so if you later add a custom domain, add a new passkey there.
 
 ## Share from Instagram on iPhone
 

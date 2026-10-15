@@ -18,6 +18,9 @@ export function readStashedWorkout(): Workout | null {
 }
 
 async function json<T>(res: Response): Promise<T> {
+  if (res.status === 401) {
+    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`);
   return body as T;
