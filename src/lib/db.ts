@@ -1,7 +1,7 @@
 import "server-only";
 import postgres from "postgres";
 import { SEED_EXERCISES } from "./seed";
-import type { Category, Exercise, Workout, WorkoutItem } from "./types";
+import type { Category, Exercise, Import, Workout, WorkoutItem } from "./types";
 
 /**
  * Storage: Postgres (e.g. Neon via the Vercel Marketplace) when DATABASE_URL is set,
@@ -25,6 +25,10 @@ interface Store {
   getWorkout(id: string): Promise<Workout | null>;
   createWorkout(w: Workout): Promise<Workout>;
   deleteWorkout(id: string): Promise<void>;
+  createImport(url: string): Promise<Import>;
+  updateImport(id: string, patch: Partial<Omit<Import, "id" | "url" | "created_at">>): Promise<void>;
+  getImport(id: string): Promise<Import | null>;
+  listImports(limit: number): Promise<Import[]>;
   listPasskeys(): Promise<Passkey[]>;
   getPasskey(id: string): Promise<Passkey | null>;
   addPasskey(p: Omit<Passkey, "created_at" | "last_used_at">): Promise<void>;
@@ -52,6 +56,19 @@ create table if not exists workouts (
   rest_seconds int not null default 0,
   round_rest_seconds int not null default 0,
   items jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+create table if not exists imports (
+  id uuid primary key default gen_random_uuid(),
+  url text not null,
+  status text not null default 'fetching',
+  error text,
+  creator text,
+  caption text,
+  comments jsonb not null default '[]'::jsonb,
+  video_url text,
+  thumbnail_url text,
+  workout_id uuid,
   created_at timestamptz not null default now()
 );
 create table if not exists passkeys (
@@ -132,6 +149,31 @@ function postgresStore(url: string): Store {
       if (!/^[0-9a-f-]{36}$/i.test(id)) return;
       await sql`delete from workouts where id = ${id}`;
     },
+    async createImport(url) {
+      await init();
+      const [row] = await sql`insert into imports (url) values (${url}) returning *`;
+      return toImport(row);
+    },
+    async updateImport(id, patch) {
+      await init();
+      const { comments, ...rest } = patch;
+      const cols = Object.keys(rest) as (keyof typeof rest)[];
+      await sql.begin(async (tx) => {
+        if (cols.length) await tx`update imports set ${tx(rest, cols)} where id = ${id}`;
+        if (comments) await tx`update imports set comments = ${tx.json(comments)} where id = ${id}`;
+      });
+    },
+    async getImport(id) {
+      await init();
+      if (!UUID.test(id)) return null;
+      const [row] = await sql`select * from imports where id = ${id}`;
+      return row ? toImport(row) : null;
+    },
+    async listImports(limit) {
+      await init();
+      const rows = await sql`select * from imports order by created_at desc limit ${limit}`;
+      return rows.map(toImport);
+    },
     async listPasskeys() {
       await init();
       const rows = await sql`select * from passkeys order by created_at`;
@@ -159,6 +201,12 @@ function postgresStore(url: string): Store {
   };
 }
 
+const UUID = /^[0-9a-f-]{36}$/i;
+
+function toImport(r: Record<string, unknown>): Import {
+  return { ...r, created_at: (r.created_at as Date).toISOString() } as Import;
+}
+
 function toPasskey(r: Record<string, unknown>): Passkey {
   return {
     id: r.id as string,
@@ -173,12 +221,13 @@ function toPasskey(r: Record<string, unknown>): Passkey {
 
 function memoryStore(): Store {
   const g = globalThis as unknown as {
-    __kbStore?: { exercises: Exercise[]; workouts: Workout[]; passkeys: Passkey[] };
+    __kbStore?: { exercises: Exercise[]; workouts: Workout[]; passkeys: Passkey[]; imports: Import[] };
   };
   g.__kbStore ??= {
     exercises: SEED_EXERCISES.map((e) => ({ ...e, id: crypto.randomUUID(), demo_url: null })),
     workouts: [],
     passkeys: [],
+    imports: [],
   };
   const s = g.__kbStore;
   return {
@@ -209,6 +258,24 @@ function memoryStore(): Store {
     },
     async deleteWorkout(id) {
       s.workouts = s.workouts.filter((w) => w.id !== id);
+    },
+    async createImport(url) {
+      const imp: Import = {
+        id: crypto.randomUUID(), url, status: "fetching", error: null, creator: null, caption: null,
+        comments: [], video_url: null, thumbnail_url: null, workout_id: null, created_at: new Date().toISOString(),
+      };
+      s.imports.push(imp);
+      return imp;
+    },
+    async updateImport(id, patch) {
+      const imp = s.imports.find((i) => i.id === id);
+      if (imp) Object.assign(imp, patch);
+    },
+    async getImport(id) {
+      return s.imports.find((i) => i.id === id) ?? null;
+    },
+    async listImports(limit) {
+      return [...s.imports].reverse().slice(0, limit);
     },
     async listPasskeys() {
       return [...s.passkeys];

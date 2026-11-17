@@ -21,8 +21,11 @@ const ParsedWorkout = z.object({
   ),
 });
 
-const SYSTEM = `You turn kettlebell workout posts (Instagram captions, transcripts, notes) into structured workouts.
+const SYSTEM = `You turn workout posts (Instagram captions, the creator's comments, transcripts, notes) into structured workouts.
+Most posts are kettlebell routines, but handle any equipment or bodyweight.
 - Extract every exercise in order. Expand shorthand ("KB", "DL", "OH press", "TGU").
+- The workout may be in the caption or in a comment (creators often post it as the first comment). Ignore hashtags, promotion and chatter.
+- Mention the equipment in notes when it is not a kettlebell.
 - If the post is an EMOM, set each item's seconds to 60 (or the stated window) and keep its reps.
 - If the post is "40/20" style intervals, set seconds to the work time and rest_seconds to the rest time.
 - If something is unstated, use the defaults described in the schema; do not invent numbers.
@@ -61,43 +64,4 @@ export async function parseWorkoutText(text: string, library: Exercise[]): Promi
     rest_seconds: Math.max(0, parsed.rest_seconds),
     round_rest_seconds: Math.max(0, parsed.round_rest_seconds),
   };
-}
-
-/**
- * Best-effort caption grab from a public Instagram URL via its Open Graph tags.
- * Instagram often blocks this; the UI falls back to asking for the caption.
- */
-export async function fetchInstagramCaption(url: string): Promise<string | null> {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  if (!/(^|\.)instagram\.com$/.test(parsed.hostname)) return null;
-  try {
-    const res = await fetch(parsed.toString(), {
-      headers: { "user-agent": "Mozilla/5.0 (compatible; facebookexternalhit/1.1)" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const meta = (prop: string) =>
-      html.match(new RegExp(`<meta[^>]+property="${prop}"[^>]+content="([^"]*)"`, "i"))?.[1] ?? null;
-    const desc = meta("og:description") ?? meta("og:title");
-    return desc ? decodeEntities(desc) : null;
-  } catch {
-    return null;
-  }
-}
-
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
 }

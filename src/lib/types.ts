@@ -56,3 +56,20 @@ export interface Workout {
   items: WorkoutItem[];
   created_at?: string;
 }
+
+export type ImportStatus = "fetching" | "extracting" | "done" | "no_workout" | "failed";
+
+/** One "send a link" job: fetch the post, extract the workout, save it. */
+export interface Import {
+  id: string;
+  url: string;
+  status: ImportStatus;
+  error: string | null;
+  creator: string | null;
+  caption: string | null;
+  comments: string[];
+  video_url: string | null;
+  thumbnail_url: string | null;
+  workout_id: string | null;
+  created_at: string;
+}

@@ -8,14 +8,17 @@ Last updated: 2026-11-17.
 
 | Thing | Location |
 |---|---|
-| Code | GitHub `chrismiller2022-collab/workouts`, branch `claude/fervent-lovelace-i2e517`. It is the repo's only branch, so it is the default branch and Vercel's production branch. |
+| Code | GitHub `chrismiller2022-collab/workouts`, branch `claude/fervent-lovelace-i2e517` is the default and Vercel's production branch. Current work is on `claude/adoring-carson-2am4tg` (preview deployments only until merged). |
 | Hosting | Vercel project `workouts` (team "Chris Miller's projects", Hobby plan). Every push to the branch redeploys production. |
 | Database | Neon Postgres (free), connected through Vercel Storage. |
 | AI | Anthropic API, model `claude-haiku-5-5`, called only by the "Extract workout" button. |
 
 ## What's built (Phase 1)
 
-- **Add** (`/add`): paste an Instagram link and/or caption. Claude turns it into exercises, reps, seconds and rounds in an editable form. With only a link, the server tries to read the caption from the page's Open Graph tags; Instagram often blocks this, so pasting is the reliable path. `/add?url=…&text=…` prefills the form, for an iPhone Share Sheet shortcut.
+- **Add** (`/add`): paste an Instagram link and/or caption.
+  - Link only: `POST /api/imports` starts a background job (`src/lib/import.ts`) that fetches the post through Bright Data (`src/lib/scrape.ts`: caption, comments, creator, video URL), extracts the workout and saves it. The page polls `/api/imports/:id` and opens the saved workout. Without `BRIGHTDATA_API_KEY` it falls back to Open Graph tags, which Instagram usually blocks.
+  - With pasted text: Claude turns it into an editable form, as before.
+  - `/add?url=…&text=…` prefills the form, for an iPhone Share Sheet shortcut.
 - **Randomize** (`/randomize`): one exercise per chosen category (swings first), with rounds sized to the target minutes. 🎲 rerolls a single exercise.
 - **Build** (`/build`): compose a workout from the library.
 - **Play** (`/play?id=…`, or unsaved via sessionStorage): interval timer with get-ready, work and rest phases, 3-2-1 beeps, spoken cues, form cues, wake lock, pause/skip/back. Rep-only sets show a "Done" button; reps plus seconds runs EMOM-style.
@@ -44,6 +47,7 @@ Workout items are stored as `jsonb` on the `workouts` row. Saving a workout link
 | Name | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Extraction. Without it, Extract returns a clear error. |
+| `BRIGHTDATA_API_KEY` | Link import. Not set yet: the owner has no Bright Data account. Scraper ids are looked up by name from `/datasets/list`; override with `BRIGHTDATA_INSTAGRAM_REELS_DATASET` / `_POSTS_DATASET`. |
 | `APP_PASSWORD` | Turns on the sign-in page. Also the session signing key unless `SESSION_SECRET` is set; changing it signs everyone out. |
 | `SESSION_SECRET` | Optional separate signing key. |
 | Database URL | Any of `DATABASE_URL`, `POSTGRES_URL`, or a prefixed form such as `STORAGE_DATABASE_URL` (the code scans for names ending in `_DATABASE_URL` or `_POSTGRES_URL`). The Neon integration sets one. |
@@ -68,8 +72,9 @@ Verified locally in headless Chromium against real Postgres 16:
 
 **Not verified yet:**
 1. **Extraction with a real API key:** never run, because no key was available in the dev container. Try one real caption first.
-2. **The "Running without a database" warning on production:** the owner saw it with Neon connected. The likely cause, a prefixed env var name, was fixed in `1a5a235`. Not confirmed on the live site because the Vercel connector was refused for the team scope. If the warning persists, check the env var names in Vercel → Settings → Environment Variables and confirm the latest deployment ran after Neon was connected.
-3. **Passkey fix on the owner's real device:** fixed in `a0e878c`; the owner hasn't confirmed yet.
+2. **Bright Data link import against the real service:** tested only against a mock. The record field names in `toPostContent` (`description`, `user_posted`, `latest_comments`, `video_url`, `thumbnail`) are best guesses and must be checked against the first real response.
+3. **The "Running without a database" warning on production:** `DATABASE_URL` and `ANTHROPIC_API_KEY` are confirmed present in Vercel production and the latest deployment postdates them, so it should be gone. Not seen on the page itself.
+4. **Passkey fix on the owner's real device:** fixed in `a0e878c`; the owner hasn't confirmed yet.
 
 ## Known limitations
 
@@ -78,7 +83,18 @@ Verified locally in headless Chromium against real Postgres 16:
 - No tests in the repo. The browser checks above were ad-hoc Playwright scripts, not committed.
 - `next lint` and `tsc` are clean; `npm run build` passes.
 
-## Roadmap (agreed with the owner)
+## Roadmap (agreed with the owner, 2026-11-17)
+
+Goal: a workout version of ReciMe for one user on iPhone. All workout types, kettlebell first.
+
+1. **Link import** (built, needs a Bright Data key and a real-world check).
+2. **Share from Instagram:** installable site plus an Apple Shortcut in the share sheet that sends the link to the app.
+3. **Read the video** when caption and comments have no workout: audio transcript plus sampled frames. `imports.video_url` is already stored for this.
+4. **Database:** equipment, muscle group, format, creator, tags; edit, search, filter.
+5. **Generator:** by time, equipment, focus and format, drawing on imported workouts and their rep ranges.
+6. **Optional native app** for a true share extension.
+
+Older notes on demos and animation:
 
 - **Phase 2:** ingest the reel video: download, transcribe, read frames with Claude vision, as a background job (Vercel function limits). Loop the relevant clip as each exercise's demo.
 - **Phase 3:** map exercises to licensed animations (ExerciseDB API or Gymvisual) through `demo_url`.

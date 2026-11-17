@@ -1,5 +1,5 @@
 "use client";
-import type { Exercise, Workout } from "./types";
+import type { Exercise, Import, Workout } from "./types";
 
 const PENDING_KEY = "kb:pending-workout";
 
@@ -41,7 +41,14 @@ export const api = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-    }).then((r) => json<{ workout: Workout; fetchedCaption: string | null }>(r)),
+    }).then((r) => json<{ workout: Workout }>(r)),
+  startImport: (url: string) =>
+    fetch("/api/imports", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    }).then((r) => json<Import>(r)),
+  getImport: (id: string) => fetch(`/api/imports/${id}`).then((r) => json<Import>(r)),
   createExercise: (e: Omit<Exercise, "id">) =>
     fetch("/api/exercises", {
       method: "POST",
